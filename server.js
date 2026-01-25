@@ -28,6 +28,19 @@ app.get('/tracks', (req, res) => res.sendFile(path.join(__dirname, 'public', 'tr
 // 404 Handler
 app.use((req, res) => res.status(404).sendFile(path.join(__dirname, 'public', '404.html')));
 
+//post
+app.post('/contact', (req, res) => {
+  const { name, email, message } = req.body;
+
+  console.log('Contact form:', name, email, message);
+
+  res.send(`
+    <h2>Thank you, ${name}!</h2>
+    <p>Your message has been received.</p>
+    <a href="/">Back to home</a>
+  `);
+});
+
 // run
 connectToDb().then(() => {
     app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
