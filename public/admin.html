@@ -27,13 +27,13 @@
 
     <main class="container">
         <div style="margin-bottom: 24px;">
-            <h1>🔐 Admin Panel</h1>
+            <h1>Admin Panel</h1>
             <p class="muted" id="admin-status">Loading...</p>
         </div>
 
         <div id="access-denied" class="hidden">
             <div class="card center" style="padding: 60px;">
-                <h2 style="color: #ef4444;">⛔ Access Denied</h2>
+                <h2 style="color: #ef4444;">Access Denied</h2>
                 <p class="muted">You need admin privileges to access this page.</p>
                 <a href="/tracks" class="btn" style="margin-top: 20px;">Go to Tracks</a>
             </div>
@@ -58,7 +58,7 @@
 
             <section class="card">
                 <div class="card-head">
-                    <h2>👥 User Management</h2>
+                    <h2>User Management</h2>
                 </div>
                 <div class="table-container">
                     <table>
@@ -190,9 +190,12 @@
           <td><span class="badge" style="background: ${roleColor};">${user.role.toUpperCase()}</span></td>
           <td class="muted">${created}</td>
           <td style="text-align: right;">
-            ${user.role !== 'admin' ? `
+            ${user._id === currentUser._id || user.email === 'admin@tynda.kz' ? '<span class="muted">—</span>' :
+                        user.role !== 'admin' ? `
               <button class="btn btn-ghost btn-sm" onclick="promoteUser('${user._id}')">Make Admin</button>
-            ` : '<span class="muted">—</span>'}
+            ` : `
+              <button class="btn btn-ghost btn-sm" style="color: #ef4444;" onclick="demoteUser('${user._id}')">Remove Admin</button>
+            `}
           </td>
         `;
                 tbody.appendChild(tr);
@@ -211,6 +214,27 @@
 
                 if (response.ok) {
                     showToast('User promoted to admin', 'success');
+                    loadUsers();
+                } else {
+                    throw new Error('Failed to update role');
+                }
+            } catch (err) {
+                showToast('Failed to update user role', 'error');
+            }
+        }
+
+        async function demoteUser(userId) {
+            if (!confirm('Are you sure you want to remove admin rights from this user?')) return;
+
+            try {
+                const response = await fetch(`/api/admin/users/${userId}/role`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role: 'user' })
+                });
+
+                if (response.ok) {
+                    showToast('Admin rights removed', 'success');
                     loadUsers();
                 } else {
                     throw new Error('Failed to update role');

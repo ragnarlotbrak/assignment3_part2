@@ -67,6 +67,12 @@ router.patch('/users/:id/role', async (req, res) => {
             return res.status(400).json({ error: 'Cannot demote yourself from admin' });
         }
 
+        // Protect super admin (admin@tynda.kz) from role changes
+        const targetUser = await db.collection('users').findOne({ _id: new ObjectId(req.params.id) });
+        if (targetUser && targetUser.email === 'admin@tynda.kz' && role !== 'admin') {
+            return res.status(403).json({ error: 'Cannot modify the super admin account' });
+        }
+
         const result = await db.collection('users').updateOne(
             { _id: new ObjectId(req.params.id) },
             { $set: { role, updatedAt: new Date() } }
