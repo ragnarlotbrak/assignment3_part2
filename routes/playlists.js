@@ -8,14 +8,52 @@ const router = express.Router();
 // All playlist routes require authentication
 router.use(isAuthenticated);
 
-//  Get all playlists for current user
+//  Get all playlists for current user (or all for admin)
 router.get('/', async (req, res) => {
     try {
         const db = getDb();
-        const playlists = await db.collection('playlists')
-            .find({ userId: new ObjectId(req.session.userId) })
-            .sort({ createdAt: -1 })
-            .toArray();
+
+        // Check if user is admin
+        const user = await db.collection('users').findOne({ _id: new ObjectId(req.session.userId) });
+        const isAdmin = user && user.role === 'admin';
+
+        let playlists;
+
+        if (isAdmin) {
+            // Admin sees all playlists with owner info
+            playlists = await db.collection('playlists')
+                .aggregate([
+                    {
+                        $lookup: {
+                            from: 'users',
+                            localField: 'userId',
+                            foreignField: '_id',
+                            as: 'owner'
+                        }
+                    },
+                    { $unwind: { path: '$owner', preserveNullAndEmptyArrays: true } },
+                    {
+                        $project: {
+                            name: 1,
+                            description: 1,
+                            coverUrl: 1,
+                            tracks: 1,
+                            userId: 1,
+                            createdAt: 1,
+                            'owner.username': 1,
+                            'owner._id': 1
+                        }
+                    },
+                    { $sort: { createdAt: -1 } }
+                ])
+                .toArray();
+        } else {
+            // Regular user sees only their playlists
+            playlists = await db.collection('playlists')
+                .find({ userId: new ObjectId(req.session.userId) })
+                .sort({ createdAt: -1 })
+                .toArray();
+        }
 
         res.json(playlists);
     } catch (err) {
@@ -32,14 +70,25 @@ router.get('/:id', async (req, res) => {
         }
 
         const db = getDb();
-        const playlist = await db.collection('playlists').findOne({
-            _id: new ObjectId(req.params.id),
-            userId: new ObjectId(req.session.userId)
-        });
+
+        // Check if user is admin
+        const user = await db.collection('users').findOne({ _id: new ObjectId(req.session.userId) });
+        const isAdmin = user && user.role === 'admin';
+
+        // Build query - admin can see any playlist, regular user only their own
+        const query = { _id: new ObjectId(req.params.id) };
+        if (!isAdmin) {
+            query.userId = new ObjectId(req.session.userId);
+        }
+
+        const playlist = await db.collection('playlists').findOne(query);
 
         if (!playlist) {
             return res.status(404).json({ error: 'Playlist not found' });
         }
+
+        // Check if this is the user's own playlist
+        playlist.isOwner = playlist.userId.toString() === req.session.userId;
 
         // Populate tracks
         if (playlist.tracks && playlist.tracks.length > 0) {

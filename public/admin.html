@@ -75,6 +75,25 @@
                     </table>
                 </div>
             </section>
+
+            <section class="card" style="margin-top: 24px;">
+                <div class="card-head">
+                    <h2>Playlist Management</h2>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Playlist Name</th>
+                                <th>Owner</th>
+                                <th>Tracks</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody id="playlists-body"></tbody>
+                    </table>
+                </div>
+            </section>
         </div>
     </main>
 
@@ -249,11 +268,63 @@
             window.location.href = '/';
         }
 
+        async function loadPlaylists() {
+            try {
+                const response = await fetch('/api/admin/playlists');
+                if (!response.ok) {
+                    document.getElementById('playlists-body').innerHTML = `
+            <tr><td colspan="4" class="center muted" style="padding: 40px;">
+              Could not load playlists.
+            </td></tr>
+          `;
+                    return;
+                }
+                const playlists = await response.json();
+                renderPlaylists(playlists);
+            } catch (err) {
+                document.getElementById('playlists-body').innerHTML = `
+          <tr><td colspan="4" class="center muted" style="padding: 40px;">
+            Error loading playlists.
+          </td></tr>
+        `;
+            }
+        }
+
+        function renderPlaylists(playlists) {
+            const tbody = document.getElementById('playlists-body');
+
+            if (playlists.length === 0) {
+                tbody.innerHTML = `
+          <tr><td colspan="4" class="center muted" style="padding: 40px;">
+            No playlists found.
+          </td></tr>
+        `;
+                return;
+            }
+
+            tbody.innerHTML = '';
+            playlists.forEach(playlist => {
+                const tr = document.createElement('tr');
+                const created = new Date(playlist.createdAt).toLocaleDateString();
+                const ownerName = playlist.owner?.username || 'Unknown';
+                const trackCount = playlist.tracks?.length || 0;
+
+                tr.innerHTML = `
+          <td><strong>${playlist.name}</strong></td>
+          <td class="muted">${ownerName}</td>
+          <td>${trackCount} track${trackCount !== 1 ? 's' : ''}</td>
+          <td class="muted">${created}</td>
+        `;
+                tbody.appendChild(tr);
+            });
+        }
+
         // Initialize
         checkAdmin().then(isAdmin => {
             if (isAdmin) {
                 loadStats();
                 loadUsers();
+                loadPlaylists();
             }
         });
     </script>

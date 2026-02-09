@@ -42,7 +42,7 @@
             <div
                 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
                 <div>
-                    <h1>🎵 My Playlists</h1>
+                    <h1 id="playlists-title">🎵 My Playlists</h1>
                     <p class="muted" id="playlists-status">Loading...</p>
                 </div>
                 <button class="btn" onclick="showCreateModal()">+ New Playlist</button>
@@ -239,6 +239,12 @@
         async function loadPlaylists() {
             const statusEl = document.getElementById('playlists-status');
             const gridEl = document.getElementById('playlists-grid');
+            const titleEl = document.getElementById('playlists-title');
+
+            // Update title for admin
+            if (currentUser && currentUser.role === 'admin') {
+                titleEl.textContent = '🎵 All Playlists';
+            }
 
             statusEl.textContent = 'Loading...';
             gridEl.innerHTML = '<div class="loading-spinner"></div>';
@@ -263,6 +269,7 @@
                     const coverStyle = p.coverUrl
                         ? `background-image: url('${p.coverUrl}'); background-size: cover; background-position: center;`
                         : `background: linear-gradient(135deg, rgba(124,58,237,0.3), rgba(6,182,212,0.3));`;
+                    const ownerInfo = p.owner?.username ? `<p class="muted" style="font-size: 0.8rem; margin-top: 4px;">by ${p.owner.username}</p>` : '';
                     return `
           <div class="card playlist-card animate-fadeInUp" onclick="viewPlaylist('${p._id}')">
             <div class="playlist-cover" style="width: 100%; height: 140px; border-radius: 12px; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; ${coverStyle}">
@@ -270,6 +277,7 @@
             </div>
             <h3>${p.name}</h3>
             <p class="muted">${p.tracks?.length || 0} tracks</p>
+            ${ownerInfo}
             ${p.description ? `<p class="muted" style="font-size: 0.85rem; margin-top: 8px;">${p.description}</p>` : ''}
           </div>
         `;
@@ -328,7 +336,7 @@
             const coverUrl = document.getElementById('playlist-cover').value.trim();
 
             try {
-                const url = id ? `/api/playlists/${id}` : '/api/playlists';
+                const url = id ? `/ api / playlists / ${id} ` : '/api/playlists';
                 const method = id ? 'PUT' : 'POST';
 
                 const res = await fetch(url, {
@@ -374,8 +382,19 @@
                 document.getElementById('detail-name').textContent = playlist.name;
                 document.getElementById('detail-description').textContent = playlist.description || '';
 
-                renderPlaylistTracks(playlist.tracksData || []);
-                await loadAvailableTracks(playlist.tracks || []);
+                // Show/hide edit and delete buttons based on ownership
+                const editBtn = document.getElementById('edit-playlist-btn');
+                const deleteBtn = document.getElementById('delete-playlist-btn');
+                if (playlist.isOwner) {
+                    editBtn.classList.remove('hidden');
+                    deleteBtn.classList.remove('hidden');
+                } else {
+                    editBtn.classList.add('hidden');
+                    deleteBtn.classList.add('hidden');
+                }
+
+                renderPlaylistTracks(playlist.tracksData || [], playlist.isOwner);
+                await loadAvailableTracks(playlist.tracks || [], playlist.isOwner);
             } catch (err) {
                 console.error(err);
                 showToast('Failed to load playlist', 'error');
@@ -390,7 +409,7 @@
         }
 
         // Render tracks in playlist
-        function renderPlaylistTracks(tracks) {
+        function renderPlaylistTracks(tracks, isOwner = true) {
             const tbody = document.getElementById('playlist-tracks-body');
 
             if (!tracks.length) {
@@ -399,20 +418,29 @@
             }
 
             tbody.innerHTML = tracks.map(t => `
-        <tr>
-          <td><span class="track-title">${t.title}</span></td>
-          <td>${t.artist || '-'}</td>
-          <td class="muted">${t.album || '-'}</td>
-          <td class="muted">${formatDuration(t.durationSeconds)}</td>
-          <td style="text-align: right;">
-            <button class="btn btn-danger btn-sm" onclick="removeTrackFromPlaylist('${t._id}')">Remove</button>
-          </td>
-        </tr>
-      `).join('');
+          <tr>
+            <td><span class="track-title">${t.title}</span></td>
+            <td>${t.artist || '-'}</td>
+            <td class="muted">${t.album || '-'}</td>
+            <td class="muted">${formatDuration(t.durationSeconds)}</td>
+            <td style="text-align: right;">
+              ${isOwner ? `<button class="btn btn-danger btn-sm" onclick="removeTrackFromPlaylist('${t._id}')">Remove</button>` : '—'}
+            </td>
+          </tr>
+        `).join('');
         }
 
         // Load available tracks to add
-        async function loadAvailableTracks(existingTrackIds) {
+        async function loadAvailableTracks(existingTrackIds, isOwner = true) {
+            // Hide add tracks section if not owner
+            const addTracksSection = document.querySelector('#playlist-detail .card:last-of-type');
+            if (!isOwner && addTracksSection) {
+                addTracksSection.style.display = 'none';
+                return;
+            } else if (addTracksSection) {
+                addTracksSection.style.display = '';
+            }
+
             try {
                 const res = await fetch('/api/tracks?limit=50');
                 const data = await res.json();

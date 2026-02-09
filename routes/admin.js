@@ -118,4 +118,40 @@ router.delete('/users/:id', async (req, res) => {
     }
 });
 
+// GET /api/admin/playlists - Get all playlists with owner info
+router.get('/playlists', async (req, res) => {
+    try {
+        const db = getDb();
+        const playlists = await db.collection('playlists')
+            .aggregate([
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: 'userId',
+                        foreignField: '_id',
+                        as: 'owner'
+                    }
+                },
+                { $unwind: { path: '$owner', preserveNullAndEmptyArrays: true } },
+                {
+                    $project: {
+                        name: 1,
+                        description: 1,
+                        tracks: 1,
+                        createdAt: 1,
+                        'owner.username': 1,
+                        'owner.email': 1
+                    }
+                },
+                { $sort: { createdAt: -1 } }
+            ])
+            .toArray();
+
+        res.json(playlists);
+    } catch (err) {
+        console.error('Error fetching playlists:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 module.exports = router;
